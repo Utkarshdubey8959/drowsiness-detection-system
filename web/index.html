@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#101a2b">
+    <meta name="description" content="A browser-based drowsiness detection prototype using your camera.">
+    <title>Drowsiness Detection</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="Drowsiness Detection home">
+          <span class="brand-mark" aria-hidden="true">D</span>
+          <span>Alert<span class="brand-light">Drive</span></span>
+        </a>
+        <span class="prototype-tag"><span class="status-dot"></span> Browser prototype</span>
+      </header>
+
+      <section class="intro">
+        <p class="eyebrow">PERSONAL FATIGUE MONITOR</p>
+        <h1>Stay aware.<br><span>Stay safe.</span></h1>
+        <p class="intro-copy">A camera-based prototype that watches for visible signs of drowsiness and escalates alerts.</p>
+      </section>
+
+      <section class="control-card" aria-labelledby="setup-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">GET STARTED</p>
+            <h2 id="setup-title">Detection setup</h2>
+          </div>
+          <span class="privacy-note"><span aria-hidden="true">◉</span> Camera stays on this device</span>
+        </div>
+
+        <div class="form-grid">
+          <label>
+            <span>Your name</span>
+            <input id="name-input" type="text" maxlength="80" autocomplete="name" placeholder="Enter your name">
+          </label>
+          <label>
+            <span>Alert phone <span class="optional">(optional)</span></span>
+            <input id="phone-input" type="tel" autocomplete="tel" placeholder="+14155550123">
+          </label>
+          <label id="alert-access-code-label" hidden>
+            <span>Remote alert access code</span>
+            <input id="alert-access-code" type="password" autocomplete="off" placeholder="Provided by the site owner">
+          </label>
+        </div>
+
+        <div class="form-footer">
+          <p id="twilio-status" class="config-note">Checking notification setup…</p>
+          <div class="button-row">
+            <button id="start-button" class="button button-primary" type="button">Start detection <span aria-hidden="true">→</span></button>
+            <button id="test-sound-button" class="button button-secondary" type="button">Test sound</button>
+            <button id="stop-button" class="button button-secondary" type="button" disabled>Stop</button>
+          </div>
+        </div>
+        <p id="app-status" class="app-status" role="status" aria-live="polite">Ready when you are. Start in a safe, stationary place.</p>
+      </section>
+
+      <section class="monitor-grid" aria-label="Live detection">
+        <div class="camera-card">
+          <div class="card-heading">
+            <div>
+              <p class="eyebrow">LIVE MONITOR</p>
+              <h2>Camera view</h2>
+            </div>
+            <span id="camera-state" class="state-pill"><span class="state-dot"></span> Camera off</span>
+          </div>
+          <div id="camera-stage" class="camera-stage">
+            <video id="camera" autoplay playsinline muted></video>
+            <canvas id="overlay" aria-hidden="true"></canvas>
+            <div id="camera-placeholder" class="camera-placeholder">
+              <span class="camera-icon" aria-hidden="true">◎</span>
+              <strong>Your camera preview will appear here</strong>
+              <span>Camera permission is requested only when you start.</span>
+            </div>
+            <div class="camera-caption"><span class="live-indicator"></span><span id="face-status">Waiting to start</span></div>
+          </div>
+          <div class="metric-row" aria-label="Face measurements">
+            <div class="metric"><span>Eye ratio</span><strong id="ear-value">—</strong><small>EAR</small></div>
+            <div class="metric"><span>Mouth ratio</span><strong id="mar-value">—</strong><small>MAR</small></div>
+            <div class="metric"><span>Head position</span><strong id="head-value">—</strong><small>ESTIMATE</small></div>
+          </div>
+        </div>
+
+        <aside class="alerts-card">
+          <div class="card-heading">
+            <div>
+              <p class="eyebrow">ESCALATION</p>
+              <h2>Alert stages</h2>
+            </div>
+            <span id="stage-count" class="stage-count">0 / 3</span>
+          </div>
+          <div id="alert-banner" class="alert-banner">
+            <span class="alert-symbol" aria-hidden="true">✓</span>
+            <span id="alert-message">No alert. Detection is standing by.</span>
+          </div>
+          <details class="alert-settings" open>
+            <summary>Customize alerts &amp; timings <span>Saved on this device</span></summary>
+            <div class="settings-grid">
+              <label class="settings-toggle">
+                <input id="sms-enabled" type="checkbox" checked>
+                <span>Send SMS alerts</span>
+              </label>
+              <label class="settings-toggle">
+                <input id="call-enabled" type="checkbox" checked>
+                <span>Place voice calls</span>
+              </label>
+              <label class="message-setting">SMS message <span>Use {name} to insert the entered name</span>
+                <textarea id="sms-message" rows="2" maxlength="500">Alert: {name} appears to be drowsy.</textarea>
+              </label>
+              <label class="message-setting">Call message <span>Use {name} to insert the entered name</span>
+                <textarea id="call-message" rows="3" maxlength="1200">Drowsiness alert. {name} appears drowsy. Please contact them and, if they are driving, advise them to stop safely. Please wake up as soon as possible. Wake up, wake up, wake up.</textarea>
+              </label>
+              <label for="sms-delay">SMS delay after warning <span>1–60 seconds</span>
+                <input id="sms-delay" type="number" min="1" max="60" step="1" value="5">
+              </label>
+              <label for="call-delay">Call delay after SMS <span>1–60 seconds</span>
+                <input id="call-delay" type="number" min="1" max="60" step="1" value="5">
+              </label>
+              <label for="retry-delay">Retry interval <span>10–600 seconds</span>
+                <input id="retry-delay" type="number" min="10" max="600" step="1" value="60">
+              </label>
+              <label for="retry-limit">Maximum retries <span>Per SMS or call</span>
+                <select id="retry-limit">
+                  <option value="0">No retries</option>
+                  <option value="1">1 retry</option>
+                  <option value="2" selected>2 retries</option>
+                </select>
+              </label>
+              <label for="alarm-limit">Alarm time limit <span>15–120 seconds</span>
+                <input id="alarm-limit" type="number" min="15" max="120" step="1" value="120">
+              </label>
+              <label for="recovery-delay">Stop after alert signs clear <span>3–15 seconds</span>
+                <input id="recovery-delay" type="number" min="3" max="15" step="1" value="5">
+              </label>
+              <label class="volume-setting" for="alarm-volume">Alarm volume <output id="alarm-volume-value">80%</output>
+                <input id="alarm-volume" type="range" min="50" max="100" step="5" value="80">
+              </label>
+            </div>
+            <div class="settings-footer">
+              <button id="save-settings" class="button button-secondary" type="button">Save settings</button>
+              <span id="settings-status" role="status">Default settings are active.</span>
+            </div>
+            <p class="settings-help">Stage 3 timing is the SMS delay plus the call delay. New settings apply to the next alert episode.</p>
+          </details>
+          <ol class="stage-list">
+            <li id="stage-1" class="stage-item">
+              <span class="stage-number">01</span>
+              <span><strong>Local sound</strong><small>Loud pulses; stops when alert or after 2 minutes</small></span>
+              <span class="stage-check" aria-hidden="true"></span>
+            </li>
+            <li id="stage-2" class="stage-item">
+              <span class="stage-number">02</span>
+              <span><strong>SMS + snapshot</strong><small id="stage-2-detail">5s after warning; up to 2 retries</small></span>
+              <span class="stage-check" aria-hidden="true"></span>
+            </li>
+            <li id="stage-3" class="stage-item">
+              <span class="stage-number">03</span>
+              <span><strong>Voice call</strong><small id="stage-3-detail">10s total; up to 2 retries</small></span>
+              <span class="stage-check" aria-hidden="true"></span>
+            </li>
+          </ol>
+          <a id="snapshot-download" class="snapshot-link" hidden download="drowsiness-alert.jpg">Download alert snapshot <span aria-hidden="true">↓</span></a>
+          <div class="activity">
+            <div class="activity-heading"><h3>Activity</h3><span>THIS SESSION</span></div>
+            <ul id="activity-log" class="activity-log" aria-live="polite">
+              <li class="empty-activity">Your detection activity will appear here.</li>
+            </ul>
+          </div>
+        </aside>
+      </section>
+
+      <footer class="safety-note">
+        <span class="safety-icon" aria-hidden="true">!</span>
+        <p><strong>Prototype, not a safety system.</strong> This heuristic can miss drowsiness or raise false alarms. Never rely on it to decide whether it is safe to drive. Test only while stationary.</p>
+      </footer>
+    </main>
+  </body>
+</html>
